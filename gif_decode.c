@@ -4,7 +4,7 @@
 #include<string.h>
 #include<stdint.h>
 
-#define GIFDEBUG
+/* #define GIFDEBUG */
 
 #ifdef GIFDEBUG
 #define LOG(...) fprintf(stdout, __VA_ARGS__)
@@ -97,7 +97,7 @@ void xy_roll(int *x, int *y, int width, int height, int interlace) {
                 goto xy_roll_update2;
             }
             else if (*y % 4 == 2) {
-                *x += 4;
+                *y += 4;
                 goto xy_roll_update3;
             }
             else if (*y % 2 == 1) {
