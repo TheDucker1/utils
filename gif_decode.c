@@ -4,7 +4,7 @@
 #include<string.h>
 #include<stdint.h>
 
-/* #define GIFDEBUG */
+#define GIFDEBUG
 
 #ifdef GIFDEBUG
 #define LOG(...) fprintf(stdout, __VA_ARGS__)
@@ -124,6 +124,32 @@ void xy_roll(int *x, int *y, int width, int height, int interlace) {
     }
 }
 
+size_t fread_until(void * _buffer, size_t sz, size_t count, FILE * stream) {
+    unsigned char * buffer = (unsigned char * )_buffer;
+    if (buffer) {
+        for (size_t i = 0; i < sz * count; i++) {
+            int c = fgetc(stream);
+            if (c == EOF) {
+                LOG("ERROR!\n");
+                return i;
+            }
+            *buffer = c;
+            buffer++;
+        }
+    }
+    else {
+        for (size_t i = 0; i < sz * count; i++) {
+            int c = fgetc(stream);
+            if (c == EOF) {
+                LOG("ERROR!\n");
+                return i;
+            }
+        }
+    }
+
+    return count * sz;
+}
+
 int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * width, int * height) {
 
     LOG("Setting Up Data\n");
@@ -154,27 +180,27 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
     PIXEL_ASPECT_RATIO = 0;
 
     LOG("Header\n");
-    buffer_read = fread(fixed_buffer, 1, 3, input);
+    buffer_read = fread_until(fixed_buffer, 1, 3, input);
     if (buffer_read != 3) return 0;
     if (memcmp(fixed_buffer, "GIF", 3) != 0) return 0;
 
     char VERSION[4];
     VERSION[3] = '\0';
-    buffer_read = fread(VERSION, 1, 3, input);
+    buffer_read = fread_until(VERSION, 1, 3, input);
     if (buffer_read != 3) return 0;
     LOG("Version: %s\n", VERSION);
 
     LOG("Logical Screen Descriptor\n");
     *width = 0;
-    buffer_read = fread(width, 1, 2, input);
+    buffer_read = fread_until(width, 1, 2, input);
     if (buffer_read != 2) return 0;
     *height = 0;
-    buffer_read = fread(height, 1, 2, input);
+    buffer_read = fread_until(height, 1, 2, input);
     if (buffer_read != 2) return 0;
     WIDTH = *width; HEIGHT = *height;
     LOG("Width x Height: %d x %d \n", WIDTH, HEIGHT);
 
-    buffer_read = fread(fixed_buffer, 1, 1, input);
+    buffer_read = fread_until(fixed_buffer, 1, 1, input);
     if (buffer_read != 1) return 0;
     GLOBAL_COLOR_TABLE_FLAG = BITx(fixed_buffer[0], 1, 7);
     COLOR_RESOLUTION = BITx(fixed_buffer[0], 3, 4);
@@ -185,9 +211,9 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
     LOG("Sort Flag: %d\n", SORT_FLAG);
     LOG("Size of Global Color Table: %d\n", SIZE_OF_GLOBAL_COLOR_TABLE);
 
-    buffer_read = fread(&BACKGROUND_COLOR_INDEX, 1, 1, input);
+    buffer_read = fread_until(&BACKGROUND_COLOR_INDEX, 1, 1, input);
     if (buffer_read != 1) return 0;
-    buffer_read = fread(&PIXEL_ASPECT_RATIO, 1, 1, input);
+    buffer_read = fread_until(&PIXEL_ASPECT_RATIO, 1, 1, input);
     if (buffer_read != 1) return 0;
     LOG("Background Color Index: %d\n", BACKGROUND_COLOR_INDEX);
     LOG("Pixel Aspect Ratio: %d\n", PIXEL_ASPECT_RATIO);
@@ -195,7 +221,7 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
     if (GLOBAL_COLOR_TABLE_FLAG) {
         LOG("Global Color Table\n");
         for (int i = 0; i < (int)(1 << (SIZE_OF_GLOBAL_COLOR_TABLE + 1)); i++) {
-            buffer_read = fread(GLOBAL_COLOR_TABLE[i].rgb, 1, 3, input);
+            buffer_read = fread_until(GLOBAL_COLOR_TABLE[i].rgb, 1, 3, input);
             if (buffer_read != 3) return 0;
         }
     }
@@ -216,7 +242,7 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
     while (!feof(input)) {
         int block_size; /* read block or sub-blocks */
 
-        buffer_read = fread(fixed_buffer, 1, 1, input);
+        buffer_read = fread_until(fixed_buffer, 1, 1, input);
         if (!buffer_read) continue;
         if (fixed_buffer[0] == 0x3B) {
             LOG("Trailer\n");
@@ -225,16 +251,16 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
         else if (fixed_buffer[0] == 0x2C) {
             LOG("Image Descriptor\n");
 
-            buffer_read = fread(&FRAME_LEFT_POSITION, 1, 2, input);
+            buffer_read = fread_until(&FRAME_LEFT_POSITION, 1, 2, input);
             if (buffer_read != 2) goto gif_decode_cleanup1;
-            buffer_read = fread(&FRAME_TOP_POSITION, 1, 2, input);
+            buffer_read = fread_until(&FRAME_TOP_POSITION, 1, 2, input);
             if (buffer_read != 2) goto gif_decode_cleanup1;
-            buffer_read = fread(&FRAME_WIDTH, 1, 2, input);
+            buffer_read = fread_until(&FRAME_WIDTH, 1, 2, input);
             if (buffer_read != 2) goto gif_decode_cleanup1;
-            buffer_read = fread(&FRAME_HEIGHT, 1, 2, input);
+            buffer_read = fread_until(&FRAME_HEIGHT, 1, 2, input);
             if (buffer_read != 2) goto gif_decode_cleanup1;
 
-            buffer_read = fread(fixed_buffer, 1, 1, input);
+            buffer_read = fread_until(fixed_buffer, 1, 1, input);
             if (buffer_read != 1) goto gif_decode_cleanup1;
             FRAME_LOCAL_COLOR_TABLE_FLAG = BITx(fixed_buffer[0], 1, 7);
             FRAME_INTERLACE_FLAG = BITx(fixed_buffer[0], 1, 6);
@@ -256,7 +282,7 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
                 LOG("Local Color Table\n");
                 
                 for (int i = 0; i < (int)(1 << (FRAME_SIZE_OF_LOCAL_COLOR_TABLE + 1)); i++) {
-                    buffer_read = fread(LOCAL_COLOR_TABLE[i].rgb, 1, 3, input);
+                    buffer_read = fread_until(LOCAL_COLOR_TABLE[i].rgb, 1, 3, input);
                     if (buffer_read != 3) goto gif_decode_cleanup1;
                 }
             }
@@ -265,7 +291,7 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
             memset(back_frame, 0, sizeof(unsigned char) * (HEIGHT) * (WIDTH));
 
             int lzw_minimum_code_size = 0;
-            buffer_read = fread(&lzw_minimum_code_size, 1, 1, input);
+            buffer_read = fread_until(&lzw_minimum_code_size, 1, 1, input);
             lzw_minimum_code_size = MAX(2, lzw_minimum_code_size);
             if (buffer_read != 1) goto gif_decode_cleanup1;
             
@@ -276,10 +302,10 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
                 /* skip frame */
                 while (1) {
                     block_size = 0;
-                    buffer_read = fread(&block_size, 1, 1, input);
+                    buffer_read = fread_until(&block_size, 1, 1, input);
                     if (buffer_read != 1) goto gif_decode_cleanup1;
                     if (block_size == 0) break;
-                    if (fseek(input, block_size, SEEK_CUR)) goto gif_decode_cleanup1;
+                    if (fread_until(NULL, 1, block_size, input) != block_size) goto gif_decode_cleanup1;
                 }
             }
             else {
@@ -316,11 +342,11 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
                     block_size = 0;
                     block_idx = 0;
 
-                    buffer_read = fread(&block_size, 1, 1, input);
+                    buffer_read = fread_until(&block_size, 1, 1, input);
                     if (buffer_read != 1) goto gif_decode_cleanup1;
                     if (block_size == 0) break;
 
-                    buffer_read = fread(fixed_buffer, 1, block_size, input);
+                    buffer_read = fread_until(fixed_buffer, 1, block_size, input);
                     if (buffer_read != block_size) goto gif_decode_cleanup1;
 
                     while ((block_idx < block_size) || buf_size >= lzw_code_size) {
@@ -476,50 +502,50 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
             FRAME_SIZE_OF_LOCAL_COLOR_TABLE = 0;
         }
         else if (fixed_buffer[0] == 0x21) {
-            buffer_read = fread(fixed_buffer, 1, 1, input);
+            buffer_read = fread_until(fixed_buffer, 1, 1, input);
             if (fixed_buffer[0] == 0x01) {
                 LOG("Plain Text Extension\n");
 
                 block_size = 0;
-                buffer_read = fread(&block_size, 1, 1, input);
+                buffer_read = fread_until(&block_size, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
                 if (block_size != 12) goto gif_decode_cleanup1;
 
                 /* Skip a lot of data */
-                buffer_read = fread(fixed_buffer, 1, 12, input);
+                buffer_read = fread_until(NULL, 1, 12, input);
                 if (buffer_read != 12) goto gif_decode_cleanup1;
 
                 block_size = 0;
                 while (1) {
-                    buffer_read = fread(&block_size, 1, 1, input);
+                    buffer_read = fread_until(&block_size, 1, 1, input);
                     if (buffer_read != 1) goto gif_decode_cleanup1;
                     if (block_size == 0) break;
-                    if (fseek(input, block_size, SEEK_CUR)) goto gif_decode_cleanup1;
+                    if (fread_until(NULL, 1, block_size, input) != block_size) goto gif_decode_cleanup1;
                 }
             }
             else if (fixed_buffer[0] == 0xF9) {
                 LOG("Graphic Control Extension\n");
 
                 block_size = 0;
-                buffer_read = fread(&block_size, 1, 1, input);
+                buffer_read = fread_until(&block_size, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
                 if (block_size != 4) goto gif_decode_cleanup1;
 
                 FRAME_HAS_GRAPHIC_CONTROL = 1;
 
-                buffer_read = fread(fixed_buffer, 1, 1, input);
+                buffer_read = fread_until(fixed_buffer, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
                 FRAME_TRANSPARENT_COLOR_FLAG = BITx(fixed_buffer[0], 1, 0);
                 FRAME_USER_INPUT_FLAG = BITx(fixed_buffer[0], 1, 1);
                 FRAME_DISPOSAL_METHOD = BITx(fixed_buffer[0], 3, 2);
 
-                buffer_read = fread(&FRAME_DELAY_TIME, 1, 2, input);
+                buffer_read = fread_until(&FRAME_DELAY_TIME, 1, 2, input);
                 if (buffer_read != 2) goto gif_decode_cleanup1;
 
-                buffer_read = fread(&FRAME_TRANSPARENT_COLOR_INDEX, 1, 1, input);
+                buffer_read = fread_until(&FRAME_TRANSPARENT_COLOR_INDEX, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
 
-                buffer_read = fread(fixed_buffer, 1, 1, input);
+                buffer_read = fread_until(fixed_buffer, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
                 if (fixed_buffer[0] != 0) goto gif_decode_cleanup1;
 
@@ -534,30 +560,30 @@ int gif_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
 
                 block_size = 0;
                 while (1) {
-                    buffer_read = fread(&block_size, 1, 1, input);
+                    buffer_read = fread_until(&block_size, 1, 1, input);
                     if (buffer_read != 1) goto gif_decode_cleanup1;
                     if (block_size == 0) break;
-                    if (fseek(input, block_size, SEEK_CUR)) goto gif_decode_cleanup1;
+                    if (fread_until(NULL, 1, block_size, input) != block_size) goto gif_decode_cleanup1;
                 }
             }
             else if (fixed_buffer[0] == 0xFF) {
                 LOG("Application Extension\n");
 
                 block_size = 0;
-                buffer_read = fread(&block_size, 1, 1, input);
+                buffer_read = fread_until(&block_size, 1, 1, input);
                 if (buffer_read != 1) goto gif_decode_cleanup1;
                 if (block_size != 11) goto gif_decode_cleanup1;
 
                 /* Skip a lot of data */
-                buffer_read = fread(fixed_buffer, 1, 11, input);
+                buffer_read = fread_until(NULL, 1, 11, input);
                 if (buffer_read != 11) goto gif_decode_cleanup1;
 
                 block_size = 0;
                 while (1) {
-                    buffer_read = fread(&block_size, 1, 1, input);
+                    buffer_read = fread_until(&block_size, 1, 1, input);
                     if (buffer_read != 1) goto gif_decode_cleanup1;
                     if (block_size == 0) break;
-                    if (fseek(input, block_size, SEEK_CUR)) goto gif_decode_cleanup1;
+                    if (fread_until(NULL, 1, block_size, input) != block_size) goto gif_decode_cleanup1;
                 }
             }
             else {
