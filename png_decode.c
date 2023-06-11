@@ -1331,6 +1331,10 @@ int png_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
     FRAME.FILTER_METHOD = 0;
     FRAME.INTERLACE_METHOD = 0;
 
+    FRAME.scanline = NULL;
+    FRAME.prev_scanline = NULL;
+    *output_array = NULL;
+
     LOG("Header\n");
     buffer_read = stream_cpy(fixed_buffer, 8);
     if (buffer_read != 8) return 0;
@@ -1418,8 +1422,6 @@ int png_decode(FILE * input, int frame, unsigned char ** output_array, int * wid
                 FRAME.interlace = 0;
             }
 
-            FRAME.scanline = NULL;
-            FRAME.prev_scanline = NULL;
             FRAME.scanline_idx = 0;
 
             FRAME.scanline = (unsigned char *)malloc(FRAME.scanline_sz);
@@ -1486,9 +1488,11 @@ png_decode_cleanup1:
     *output_array = NULL;
     FRAME.scanline = NULL;
     FRAME.prev_scanline = NULL;
+    stream_destroy();
     return 0;
 
 png_decode_success:
+    stream_destroy();
     free(FRAME.scanline); FRAME.scanline = NULL;
     free(FRAME.prev_scanline); FRAME.prev_scanline = NULL;
     LOG("PNG DECODE SUCCESS");
